@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:13.3-alpine
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.8.16
+
+  celery:
+    build:
+      context: .
+    command: celery -A ik_drf worker -l info
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+
+  celery-beat:
+    build:
+      context: .
+    command: celery -A ik_drf beat -l info
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+
+  app:
+    build:
+      context: .
+    command: >
+      sh -c "python manage.py collectstatic --noinput
+      && python manage.py makemigrations
+      && python manage.py migrate
+      && uvicorn ik_drf.asgi:application --host 0.0.0.0 --port 8000"
+    env_file:
+      - .env
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+      - celery
+
+
+volumes:
+  pg_data:
